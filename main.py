@@ -1,64 +1,123 @@
 import numpy as np
+from functools import reduce
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
-N = 1
-for _ in range(N):
-    # Game 1
-    payoff_1 = np.array([[1, 0], [0, 1]]) # |A_1| * |A_2|
-    payoff_2 = np.array([[1, 0], [0, 1]]) # |A_2| * |A_1|
+class Game:
+    def __init__(self, payoffs):
+        self.payoffs = payoffs
 
-    # Game 2
-    payoff_1 = np.array([[0.48699426, 0.27564575], [0.07094273, 0.86102572]])
-    payoff_2 = np.array([[0.32304411, 0.64966661], [0.39678333, 0.14804825]])
+class Learner:
+    def __init__(self, game, role):
+        self.game = game
+        self.role = role
+        self.num_actions = game.payoffs[0].shape[role]
+        self.current_strategy = None
 
-    T = 10000
+    def observe_utility(self, utility):
+        pass
 
-    strategies_1 = np.zeros((T, 2))
-    strategies_2 = np.zeros((T, 2))
-    plays = np.zeros((T,2,2))
+    def next_strategy(self):
+        pass
 
+class RMLearner(Learner):
+    def __init__(self, game, role):
+        super().__init__(game, role)
+        self.cum_regret = np.zeros(self.num_actions)
 
-    for t in range(T):
+    def observe_utility(self, utility):
+        cur_utility = self.current_strategy @ utility
+        cur_regret = utility - cur_utility
+        self.cum_regret += cur_regret
 
-        cum_play = plays.sum(axis = 0)
+    def next_strategy(self):
+        cum_reg_p = np.maximum(self.cum_regret, 0)
+        total = cum_reg_p.sum()
 
-        if t == 0:
-            p_1 = np.random.random()
-            p_2 = np.random.random()
-            strategy_1 = np.array([p_1, 1-p_1])
-            strategy_2 = np.array([p_2, 1-p_2])
-
+        if total == 0:
+            strategy = np.ones(self.num_actions)/self.num_actions
         else:
-            u_1 = (cum_play * payoff_1).sum()
-            u_2 = (cum_play * payoff_2).sum()
+            strategy = cum_reg_p/total
 
-            regret_1 = payoff_1 @ cum_play.sum(axis = 0) - u_1
-            regret_2 = payoff_2 @ cum_play.sum(axis = 1) - u_2
+        self.current_strategy = strategy
+        return strategy
 
-            regret_1 = np.maximum(regret_1, 0)
-            regret_2 = np.maximum(regret_2, 0)
+class LearningAlg:
+    def __init__(self, game: Game, learner_types: list):
+        self.game = game
+        self.num_learners = len(learner_types)
+        assert self.num_learners == game.payoffs[0].ndim, "Incorrect number of learners"
+        self.history = []
+        self.learners = [learner_type(game, role) for role, learner_type in enumerate(learner_types)]
+        self.rounds = 0
 
-            strategy_1 = regret_1 / regret_1.sum() if regret_1.sum() > 0 else np.array([1/2, 1/2])
-            strategy_2 = regret_2 / regret_2.sum() if regret_2.sum() > 0 else np.array([1/2, 1/2])
+    def train(self, rounds: int):
+        for _ in range(rounds):
+            # Next Strategies
+            strategies = [learner.next_strategy() for learner in self.learners]
+            self.history.append(strategies)
 
-        strategies_1[t] = strategy_1
-        strategies_2[t] = strategy_2
-        plays[t] = strategy_1[:,None] @ strategy_2[None,:]
+            # Calculate Utilities
+            utilities = []
+            for i in range(self.num_learners):
+                utility_i = self.game.payoffs[i]
+                for strategy in strategies[:i]:
+                    utility_i = np.tensordot(utility_i, strategy, axes=([0], [0]))
+                for strategy in strategies[i+1:]:
+                    utility_i = np.tensordot(utility_i, strategy, axes=([1], [0]))
+                utilities.append(utility_i)
+            # Propogate Utilities
+            for role, learner in enumerate(self.learners):
+                learner.observe_utility(utilities[role])
+        self.rounds += rounds
 
-    avg_plays = np.zeros((T,2,2))
-    avg_strategies_1 = np.zeros((T,2))
-    avg_strategies_2 = np.zeros((T,2))
-    for t in range(T):
-        avg_plays[t] = plays[:t+1].mean(axis = 0)
-        avg_strategies_1[t] = strategies_1[:t+1].mean(axis = 0)
-        avg_strategies_2[t] = strategies_2[:t+1].mean(axis = 0)
+    def average_plays(self):
+        avg_plays = np.zeros((self.rounds,) + self.game.payoffs[0].shape)
+        total_play = np.zeros_like(self.game.payoffs[0])
 
-    #
+        for round, strategies in enumerate(self.history):
+            play = reduce(np.multiply.outer, strategies)
+            total_play += play
+            avg_plays[round] = total_play/(round + 1)
 
-    # #=================== Average Strategies Plot ===================
-    avg_1_A = avg_strategies_1[:, 0]
-    avg_2_A = avg_strategies_2[:, 0]
+        return avg_plays
+
+    def average_strategies(self):
+        avg_strategies  = [np.zeros((self.rounds, learner.num_actions)) for learner in self.learners]
+        ttl_strategy = [np.zeros(learner.num_actions) for learner in self.learners]
+
+        for round, strategies in enumerate(self.history):
+            for role, strategy in enumerate(strategies):
+                ttl_strategy[role] += strategy
+                avg_strategies[role][round] = ttl_strategy[role]/(round + 1)
+
+        return avg_strategies
+
+def find_weird_games(N, T, eps):
+    for _ in range(N):
+        payoffs = np.random.random((2,2,2))
+        learning_alg = regret_learning(payoffs, T)
+
+        avg_plays = learning_alg.average_plays()
+        avg_play = avg_plays[-1]
+
+        if abs(np.linalg.det(avg_play)) > eps:
+            avg_strategies = learning_alg.average_strategies()
+            visualize_strategies_2_2(avg_strategies)
+            return payoffs
+
+def regret_learning(payoffs, T):
+    game = Game(payoffs)
+    learner_types = [RMLearner for _ in range(payoffs.ndim - 1)]
+    learning_alg = LearningAlg(game, learner_types)
+    learning_alg.train(T)
+    return learning_alg
+
+#=================== Average Strategies Plot ===================
+def visualize_strategies_2_2(avg_strategies):
+    T = len(avg_strategies[0])
+    avg_1_A = avg_strategies[0][:, 0]
+    avg_2_A = avg_strategies[1][:, 0]
 
     # Create 2D plot
     plt.figure(figsize=(8, 8))
@@ -77,48 +136,9 @@ for _ in range(N):
     plt.show()
 
 
-    # #=================== Average Plays Plot ===================
-    # fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharex=False, sharey=False)
-
-    # # Left plot: AA vs BB
-    # axes[0].scatter(avg_plays[:, 0, 0], avg_plays[:, 1, 1],
-    #                 c=range(T), cmap='viridis', s=20, alpha=0.7)
-    # axes[0].set_title('AA vs BB')
-    # axes[0].set_xlabel('AA')
-    # axes[0].set_ylabel('BB')
-    # axes[0].set_xlim(0, 1)
-    # axes[0].set_ylim(0, 1)
-    # # Right plot: AB vs BA
-    # axes[1].scatter(avg_plays[:, 0, 1], avg_plays[:, 1, 0],
-    #                 c=range(T), cmap='viridis', s=20, alpha=0.7)
-    # axes[1].set_title('AB vs BA')
-    # axes[1].set_xlabel('AB')
-    # axes[1].set_ylabel('BA')
-    # plt.xlim(0, 1)
-    # plt.ylim(0, 1)
-    # plt.tight_layout()
-    # plt.show()
-
-    # AA = avg_plays[:, 0, 0]
-    # AB = avg_plays[:, 0, 1]
-    # BA = avg_plays[:, 1, 0]
-    # BB = avg_plays[:, 1, 1]
-
-    # fig, axes = plt.subplots(4, 1, figsize=(8, 8), sharex=True)
-
-    # axes[0].plot(range(T), AA, color='C0')
-    # axes[0].set_ylabel('AA')
-    # axes[1].plot(range(T), AB, color='C1')
-    # axes[1].set_ylabel('AB')
-    # axes[2].plot(range(T), BA, color='C2')
-    # axes[2].set_ylabel('BA')
-    # axes[3].plot(range(T), BB, color='C3')
-    # axes[3].set_ylabel('BB')
-    # axes[3].set_xlabel('Time step')
-
-    # plt.tight_layout()
-    # plt.show()
-    #=================== Animation =====================
+# =================== Animation =====================
+def visualize_plays_2_2(avg_plays):
+    T = len(avg_plays)
     AA, AB, BA, BB = avg_plays[:, 0, 0], avg_plays[:, 0, 1], avg_plays[:, 1, 0], avg_plays[:, 1, 1]
     data_series = [AA, AB, BA, BB]
     labels = ['AA', 'AB', 'BA', 'BB']
@@ -144,14 +164,13 @@ for _ in range(N):
         return bars
 
     # --- Animation speed control ---
-    interval = 1000 / T  # milliseconds per frame so total ≈ 10 seconds
+    interval = 1000 / T   # milliseconds per frame so total ≈ 10 seconds
 
     ani = animation.FuncAnimation(fig, update, frames=T, interval=interval, blit=False, repeat=True)
     plt.show()
 
     ani.save('strategies.mp4', writer='ffmpeg', fps=T/1.5, dpi=150)
 
-    determinant = avg_plays[-1][1][1] * avg_plays[-1][0][0] - avg_plays[-1][0][1] * avg_plays[-1][1][0]
-    if determinant > 0.01:
-        print(payoff_1, payoff_2, determinant)
-        break
+
+if __name__ == "__main__":
+    find_weird_games(10000, 1000, 0.01)
