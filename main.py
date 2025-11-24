@@ -21,16 +21,36 @@ class Learner:
         pass
 
 class RMLearner(Learner):
-    def __init__(self, game, role):
+    def __init__(self, game, role, random_steps = 0):
         super().__init__(game, role)
         self.cum_regret = np.zeros(self.num_actions)
+        self.steps = 0
+        self.random_steps = random_steps
 
     def observe_utility(self, utility):
         cur_utility = self.current_strategy @ utility
         cur_regret = utility - cur_utility
         self.cum_regret += cur_regret
+        self.steps += 1
 
     def next_strategy(self):
+        # # Random Steps
+        # if self.steps < self.random_steps:
+        #     random_strategy = np.random.random(self.num_actions)
+        #     random_strategy /= random_strategy.sum()
+        #     self.current_strategy = random_strategy
+        #     return random_strategy
+
+        # Initial Steps
+        if self.steps == 1:
+            self.current_strategy = np.array([1.0,0.0])
+            return self.current_strategy
+
+        if self.steps == 2:
+            self.current_strategy = np.array([0.0,1.0])
+            return self.current_strategy
+
+        # Regret Matching
         cum_reg_p = np.maximum(self.cum_regret, 0)
         total = cum_reg_p.sum()
 
@@ -43,12 +63,12 @@ class RMLearner(Learner):
         return strategy
 
 class LearningAlg:
-    def __init__(self, game: Game, learner_types: list):
+    def __init__(self, game: Game, learner_types: list, random_steps: int = 0):
         self.game = game
         self.num_learners = len(learner_types)
         assert self.num_learners == game.payoffs[0].ndim, "Incorrect number of learners"
         self.history = []
-        self.learners = [learner_type(game, role) for role, learner_type in enumerate(learner_types)]
+        self.learners = [learner_type(game, role, random_steps) for role, learner_type in enumerate(learner_types)]
         self.rounds = 0
 
     def train(self, rounds: int):
@@ -73,7 +93,7 @@ class LearningAlg:
 
     def average_plays(self):
         avg_plays = np.zeros((self.rounds,) + self.game.payoffs[0].shape)
-        total_play = np.zeros_like(self.game.payoffs[0])
+        total_play = np.zeros(self.game.payoffs[0].shape, dtype=np.float64)
 
         for round, strategies in enumerate(self.history):
             play = reduce(np.multiply.outer, strategies)
@@ -173,4 +193,12 @@ def visualize_plays_2_2(avg_plays):
 
 
 if __name__ == "__main__":
-    find_weird_games(10000, 1000, 0.01)
+    # payoffs = np.array([[[0,0,1], [1,0,0], [0,1,0]], [[0,1,0], [0,0,1], [1,0,0]]])
+    # payoffs = np.array([[[1,0],[0,1]], [[1,0],[0,1]]])
+    # game = Game(payoffs)
+    # learning_alg = LearningAlg(game, [RMLearner, RMLearner], random_steps=2)
+    # learning_alg.train(10000)
+    # avg_plays = learning_alg.average_plays()
+    # visualize_strategies_2_2(learning_alg.average_strategies())
+
+    find_weird_games(10000, 1000, 0.05)
