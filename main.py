@@ -7,6 +7,7 @@ import string
 import os
 import matplotlib.image as mpimg
 import shutil
+
 class Game:
     def __init__(self, payoffs):
         self.payoffs = payoffs
@@ -340,9 +341,9 @@ def generate_side_by_side_from_run_multiple(
         f"{learner_label}: Average Player Strategies Over Time\n"
         f"#Simulations = {N}, #Rounds = {T}",
         fontsize=14,
-        y=0.91,
+        y=0.85,
     )
-    fig_s.tight_layout(rect=[0, 0, 1, 0.86])
+    fig_s.tight_layout(rect=[0, 0, 1, 0.90])
 
     strategies_out = os.path.join("results", f"{base_name}_strategies_multi_r.png")
     fig_s.savefig(strategies_out, dpi=300)  # higher DPI
@@ -369,12 +370,12 @@ def generate_side_by_side_from_run_multiple(
         f"{learner_label}: Average Empirical Play Over Time\n"
         f"#Simulations = {N}, #Rounds = {T}",
         fontsize=14,
-        y=0.91,
+        y=0.85,
     )
-    fig_p.tight_layout(rect=[0, 0, 1, 0.86])
+    fig_p.tight_layout(rect=[0, 0, 1, 0.90])
 
     plays_out = os.path.join("results", f"{base_name}_plays_multi_r.png")
-    fig_p.savefig(plays_out, dpi=300)  # higher DPI
+    fig_p.savefig(plays_out, dpi=600)  # higher DPI
     if show:
         plt.show()
     else:
@@ -405,7 +406,7 @@ def visualize_strategies_2_2(strategies):
     plt.xlim(0, 1)
     plt.ylim(0, 1)
     plt.tight_layout()
-    plt.show()
+    # plt.show()
 
 
 # =================== Static Visualization =====================
@@ -492,14 +493,14 @@ def visualize_plays_static(plays, title_prefix="", title_suffix=""):
         title += f' ({num_runs} runs)'
     if title_suffix:
         title += f' {title_suffix}'
-    fig.suptitle(title, fontsize=16, fontweight='bold')
-    plt.tight_layout()
+    fig.suptitle(title, fontsize=16, fontweight='bold', y=0.92)
+    plt.tight_layout(rect=[0, 0, 1, 0.92])
 
     # Always save to results folder
     os.makedirs("results", exist_ok=True)
     fig.savefig(os.path.join("results", "plays_static.png"), dpi=150)
 
-    plt.show()
+    # plt.show()
 
 def visualize_strategies_static(strategies_list, title_prefix="", title_suffix=""):
     """
@@ -587,14 +588,14 @@ def visualize_strategies_static(strategies_list, title_prefix="", title_suffix="
         title += f' ({num_runs} runs)'
     if title_suffix:
         title += f' {title_suffix}'
-    fig.suptitle(title, fontsize=16, fontweight='bold')
-    plt.tight_layout()
+    fig.suptitle(title, fontsize=16, fontweight='bold', y=0.92)
+    plt.tight_layout(rect=[0, 0, 1, 0.90])
 
     # Always save to results folder
     os.makedirs("results", exist_ok=True)
     fig.savefig(os.path.join("results", "strategies_static.png"), dpi=150)
 
-    plt.show()
+    # plt.show()
 
 # =================== Animation =====================
 def visualize_plays_2_2_animate(plays):
@@ -627,7 +628,7 @@ def visualize_plays_2_2_animate(plays):
     interval = 1000 / T   # milliseconds per frame so total ≈ 10 seconds
 
     ani = animation.FuncAnimation(fig, update, frames=T, interval=interval, blit=False, repeat=True)
-    plt.show()
+    # plt.show()
 
     ani.save('strategies.mp4', writer='ffmpeg', fps=T/1.5, dpi=150)
 
@@ -646,12 +647,12 @@ if __name__ == "__main__":
     # avg_plays = learning_alg.average_plays()
     # visualize_plays_static(avg_plays)
     generate_side_by_side_from_run_multiple(
-        rs=(0, 2, 10, 100),
-        N=100,          # number of simulations (same as your example)
-        n=3,          # 2x2 games
+        rs=(0, 5, 25, 125),
+        N=1,          # number of simulations (same as your example)
+        n=2,          # 2x2 games
         T=1_000,     # 10,000 steps as requested
         learner_types=RMLearner,
         jinx=True,
-        base_name="rm_3_100",
+        base_name="rm_2_100",
         show = False
     )
